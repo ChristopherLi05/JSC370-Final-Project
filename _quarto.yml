@@ -9,7 +9,7 @@ website:
       - text: "Home"
         href: project/index.qmd
       - text: "Data Exploration (Archive)"
-        href: data-exploration.qmd
+        href: project/data_exploration.qmd
     right:
       - icon: github
         href: https://github.com/ChristopherLi05/JSC370-Final-Project

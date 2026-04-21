@@ -1,0 +1,129 @@
+---
+title: "JSC370 Code Exploration"
+author: "Christopher Li"
+jupyter: python3
+execute:
+  warning: false
+  message: false
+---
+
+# Data Exploration
+
+This is a collection of code chunks that were used for data exploration. This is archived for prosterity's sake. 
+
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.api as sm
+import numpy as np
+import json
+import plotly.express as px
+
+import nltk
+
+nltk.download("vader_lexicon")
+from nltk.sentiment import SentimentIntensityAnalyzer
+```
+
+```{python}
+course_eval_df = pd.read_csv("../UofT-Course-Data/data/course_evals.csv")
+rmf_ratings_df = pd.read_csv("../UofT-Course-Data/data/ratings.csv")
+rmf_df = pd.read_csv("../UofT-Course-Data/data/ratemyprof.csv")
+
+with open("../UofT-Course-Data/data/prof_mapping.json") as f:
+    prof_mapping = json.load(f)
+
+course_eval_df["avg_INS"] = course_eval_df[
+    ["INS1","INS2","INS3","INS4","INS5","INS6"]
+].mean(axis=1)
+
+course_eval_df["avg_ARTSC"] = course_eval_df[
+    ["ARTSC1","ARTSC2","ARTSC3"]
+].mean(axis=1)
+```
+
+```{python}
+print("Course Evals:")
+print(course_eval_df.describe())
+print("RMF Ratings:")
+print(rmf_ratings_df.describe())
+print("RMF")
+print(rmf_df.describe())
+```
+
+```{python}
+plt.figure()
+sns.histplot(rmf_df[rmf_df["numRatings"] >= 5]["avgRating"], bins=25, kde=True)
+plt.title("Distribution of Average Ratings (Professors with ≥5 Ratings)")
+plt.xlabel("Average Rating")
+plt.ylabel("Count")
+plt.show()
+```
+
+```{python}
+plt.figure()
+sns.scatterplot(
+    data=course_eval_df,
+    x="avg_INS",
+    y="avg_ARTSC",
+    alpha=0.3
+)
+
+plt.title("Average Instructor Score vs Average ARTSC Score")
+plt.xlabel("Average INS Score")
+plt.ylabel("Average ARTSC Score")
+
+plt.show()
+```
+
+```{python}
+predictors = ["INS1","INS2","INS3","INS4","INS5","INS6",
+              "ARTSC1","ARTSC2","ARTSC3"]
+
+X = course_eval_df[predictors]
+X = sm.add_constant(X)
+
+successes = course_eval_df["number_responses"]
+trials = course_eval_df["number_invited"]
+y = pd.concat([successes, trials - successes], axis=1)
+
+mask = X.notna().all(axis=1) & y.notna().all(axis=1)
+X_clean = X[mask]
+y_clean = y[mask]
+
+
+glm_binom = sm.GLM(y_clean, X_clean, family=sm.families.Binomial())
+results = glm_binom.fit()
+
+print(results.summary())
+
+odds_ratios = np.exp(results.params)
+print("Odds ratios:\n", odds_ratios)
+```
+
+```{python}
+residual_deviance = results.deviance
+null_deviance = results.null_deviance
+pseudo_r2 = 1 - residual_deviance / null_deviance
+print(residual_deviance, null_deviance, pseudo_r2)
+```
+
+```{python}
+# Plotly Test
+
+fig = px.scatter(
+    course_eval_df,
+    x="avg_INS",
+    y="avg_ARTSC",
+    opacity=0.3,
+    title="Average Instructor Score vs Average ARTSC Score",
+    labels={
+        "avg_INS": "Average INS Score",
+        "avg_ARTSC": "Average ARTSC Score"
+    }
+)
+
+fig.show()
+```
