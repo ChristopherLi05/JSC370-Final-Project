@@ -1,30 +1,24 @@
 project:
   type: website
-  output-dir: "../website"
+  output-dir: "website"
 
 website:
-  title: "My Website"
+  title: "JSC370 Final Project"
   navbar:
     left:
       - text: "Home"
         href: project/index.qmd
-      - text: "About"
-        href: project/about.qmd
+      - text: "Data Exploration (Archive)"
+        href: data-exploration.qmd
     right:
       - icon: github
-        href: https://github.com/JSC370/JSC370-2026/
-      - text: "JSC370 Home"
-        href: https://jsc370.github.io/JSC370-2026/
-      - text: "Dashboard"
-        href: https://jsc370-finalproject.onrender.com/
-        target: _blank
+        href: https://github.com/ChristopherLi05/JSC370-Final-Project
   page-footer:
-    center: "Copyright &copy; 2026 My Name. All rights reserved."
+    center: "Copyright &copy; 2026 Christopher Li. All rights reserved."
 
 format:
   html:
     theme: darkly
     toc: true
     toc-float: true
-    include-after-body: footer.html
     css: project/styles.css
