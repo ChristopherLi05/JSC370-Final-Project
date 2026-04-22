@@ -33,6 +33,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Create redirect index.html
+        run: |
+          mkdir -p website
+          cat > website/index.html << 'EOF'
+          <html xmlns="http://www.w3.org/1999/xhtml">
+            <head>
+              <title>Redirect to project/index.html</title>
+              <meta http-equiv="refresh" content="0;URL='project/index.html'" />
+            </head>
+            <body>
+            </body>
+          </html>
+          EOF
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
