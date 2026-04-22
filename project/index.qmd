@@ -6,9 +6,14 @@ execute:
   warning: false
   message: false
   echo: false
+  output: false
+fig-cap-location: bottom
+number-sections: true
 ---
 
-# Test test 1
+# Official vs Wild? How do Course Evaluations stack up to RateMyProfessor ratings?
+
+// Generic description here
 
 ```{python}
 import pandas as pd
@@ -16,8 +21,218 @@ import statsmodels.api as sm
 import numpy as np
 import json
 import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+pio.templates.default = "plotly_dark"
+
 import nltk
 
 nltk.download("vader_lexicon")
 from nltk.sentiment import SentimentIntensityAnalyzer
+
+from collections import Counter
+```
+
+```{python}
+df_evals = pd.read_csv("../UofT-Course-Data/data/course_evals.csv")
+df_rmp = pd.read_csv("../UofT-Course-Data/data/ratemyprof.csv")
+df_rmp_ratings = pd.read_csv("../UofT-Course-Data/data/ratings.csv")
+
+with open("../UofT-Course-Data/data/prof_mapping.json") as f:
+    prof_mapping = json.load(f)
+
+df_rmp_ratings['date'] = pd.to_datetime(
+    df_rmp_ratings['date'].str.replace(r'\s*\+.*$', '', regex=True),
+    format='%Y-%m-%d %H:%M:%S',
+    errors='coerce'
+)
+```
+
+## Datasets
+
+The data used in this analysis comes from two sources: U of T Evaluations and Rate My Professor. The *U of T Course Evaluations** dataset was collected via webscraping and contain a per-section instructor ratings across nine dimensions (INS1–INS6, ARTSC1-ARTSC-3) for courses spanning multiple years. The **RateMyProfessor (RMP)** dataset was scraped from the public RMP website and includes per-rating helpfulness, clarity, and difficulty scores, as well as free-text comments and tag selections left by students voluntarily.
+
+Note that the tables shown below do not represent the full dataset, and should only be used for illustrative purposes. The the dataset descriptions and raw files are available at [github.com/ChristopherLi05/UofT-Course-Data](https://github.com/ChristopherLi05/UofT-Course-Data). 
+
+### U of T Course Evaluations
+
+```{python}
+df_evals["average_ins"] = round(
+    (df_evals["INS1"] + df_evals["INS2"] + df_evals["INS3"] +
+     df_evals["INS4"] + df_evals["INS5"]) / 5, 2
+)
+df_evals["full_name"] = df_evals["first_name"] + " " + df_evals["last_name"]
+```
+
+```{python}
+#| output: true
+
+go.Figure(data=[go.Table(
+    header=dict(
+        values=["Professor", "Course", "Year", "Average Rating"],
+        align='left'
+    ),
+    cells=dict(
+        values=[df_evals["full_name"], df_evals["course"], df_evals["year"], df_evals["average_ins"]],
+        align='left',
+        height=30
+    )
+)]).show()
+```
+
+
+### Rate My Professor Ratings
+
+```{python}
+df_rmp_ratings["year"] = df_rmp_ratings["date"].dt.year
+df_rmp["full_name"] = df_rmp["firstName"] + " " + df_rmp["lastName"]
+
+df_rmp_ratings = pd.merge(df_rmp_ratings, df_rmp[["id", "full_name"]], left_on="prof_id", right_on="id").drop(labels=["id"], axis=1)
+df_rmp_ratings["average_rating"] = round((df_rmp_ratings["helpfulRating"] + df_rmp_ratings["clarityRating"]) / 2, 2)
+```
+
+```{python}
+#| output: true
+df_temp = df_rmp_ratings.sample(frac=1).reset_index(drop=True)
+
+go.Figure(data=[go.Table(
+    header=dict(values=["Professor", "Course", "Year", "Average Rating"], align='left'),
+    cells=dict(
+        values=[df_temp["full_name"], df_temp["class"], df_temp["year"], df_temp["average_rating"]],
+        align='left',
+        height=30
+    )
+)]).show()
+```
+
+## Data Exploration
+
+If you look at the original dataset, you may have noticed that the fields do not match. However, as professors are primarily rated based upon the courses that they teach, we can assume that the average of the INS categories are how students will actually rate their professor.
+
+```{python}
+#| output: true
+#| label: fig-ratings-dist
+#| fig-cap: "Distribution of instructor ratings from official course evaluations and RateMyProfessor (RMP). Official evaluations are heavily concentrated near 4.2–4.39, while RMP ratings are much flatter, suggesting that students who voluntarily rate professors on RMP tend to give more critical assessments than those captured in mandatory course evaluations."
+
+fig = go.Figure()
+
+fig.add_trace(go.Histogram(
+    x=df_evals.groupby(["first_name", "last_name"])["average_ins"].mean(),
+    name="Official Eval",
+    xbins=dict(start=1, end=5, size=0.2),
+    histnorm="probability",
+    opacity=0.75
+))
+
+fig.add_trace(go.Histogram(
+    x=df_rmp["avgRating"],
+    name="RMP Eval",
+    xbins=dict(start=1, end=5, size=0.2),
+    histnorm="probability",
+    opacity=0.75
+))
+
+fig.update_layout(
+    barmode="overlay",
+    title="Distribution of Instructor Ratings: Official Evals vs RateMyProfessor",
+    xaxis_title="Rating (1–5)",
+    yaxis_title="Proportion",
+    legend=dict(x=0.01, y=0.99)
+)
+fig.show()
+```
+
+```{python}
+ins_means = {
+    f"INS{i}": df_evals[f"INS{i}"].mean() for i in range(1, 6)
+}
+
+rmp_dim_means = {
+    "Helpfulness": df_rmp_ratings["helpfulRating"].mean(),
+    "Clarity": df_rmp_ratings["clarityRating"].mean(),
+    "Ease": 6 - df_rmp_ratings["difficultyRating"].mean()
+}
+```
+
+```{python}
+#| output: true
+#| label: fig-radar-ins
+#| fig-cap: "Radar chart of mean scores across the five official INS evaluation dimensions. Notice how the average of each category all lie in the 4.2-4.5 range. From anecdotal experience, students tend to just rate a 1/5 depending on their experience with the course."
+
+categories_ins = list(ins_means.keys())
+values_ins = list(ins_means.values()) + [list(ins_means.values())[0]]
+cats_ins_closed = categories_ins + [categories_ins[0]]
+
+fig = go.Figure()
+
+fig.add_trace(go.Scatterpolar(
+    r=values_ins,
+    theta=cats_ins_closed,
+    fill='toself',
+    name='Official Eval (INS dimensions)',
+))
+
+fig.update_layout(
+    title="Radar Chart: Official INS Dimensions",
+    polar=dict(radialaxis=dict(range=[1, 5])),
+    showlegend=True,
+    height=500,
+    margin=dict(t=80, b=80, l=100, r=100)
+)
+fig.show()
+```
+
+```{python}
+#| output: true
+
+import re
+from collections import Counter
+
+# Parse and flatten all tags
+all_tags = []
+for tags_str in df_rmp_ratings["ratingTags"].dropna():
+    tags = [t.strip() for t in tags_str.split("--") if t.strip()]
+    all_tags.extend(tags)
+
+tag_counts = Counter(all_tags)
+tag_counts_df = pd.DataFrame(tag_counts.items(), columns=["tag", "count"]).sort_values("count", ascending=False)
+
+# Remove placeholder/empty tags
+tag_counts_df = tag_counts_df[tag_counts_df["tag"].str.len() > 0]
+
+# Normalize sizes for display
+max_count = tag_counts_df["count"].max()
+min_count = tag_counts_df["count"].min()
+tag_counts_df["size"] = 12 + 38 * (tag_counts_df["count"] - min_count) / (max_count - min_count + 1)
+
+# Spread tags across a pseudo-random 2D grid
+rng = np.random.default_rng(42)
+n = len(tag_counts_df)
+tag_counts_df["x"] = rng.uniform(0, 1, n)
+tag_counts_df["y"] = rng.uniform(0, 1, n)
+
+fig = go.Figure()
+
+fig.add_trace(go.Scatter(
+    x=tag_counts_df["x"],
+    y=tag_counts_df["y"],
+    mode="text",
+    text=tag_counts_df["tag"],
+    textfont=dict(
+        size=tag_counts_df["size"].tolist(),
+        color=[f"rgba({rng.integers(100,255)},{rng.integers(100,255)},{rng.integers(180,255)},0.9)" for _ in range(n)]
+    ),
+    hovertemplate="<b>%{text}</b><br>Count: %{customdata}<extra></extra>",
+    customdata=tag_counts_df["count"]
+))
+
+fig.update_layout(
+    title="RateMyProfessor Rating Tags Word Cloud",
+    xaxis=dict(visible=False),
+    yaxis=dict(visible=False),
+    height=550,
+    margin=dict(t=60, b=20, l=20, r=20)
+)
+
+fig.show()
 ```
