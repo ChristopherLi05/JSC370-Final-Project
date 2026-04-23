@@ -17,6 +17,8 @@ Every time course selection rolls around, you can spot the furious searching fro
 
 In this project, we compare and contrast these two methods: one official and one personal. We will first do some exploratory analysis on each dataset, exploring how they compare in several key areas, followed by some statistical analysis & modeling. 
 
+Note: the contents of this website is primarily for supporting the main Project Report. There will be some analysis in the table captions, however the bulk of it will lie within the project report. 
+
 ```{python}
 import pandas as pd
 import statsmodels.api as sm
@@ -62,7 +64,7 @@ df_rmp_ratings['date'] = pd.to_datetime(
 
 ## Datasets
 
-The data used in this analysis comes from two sources: U of T Evaluations and Rate My Professor. The *U of T Course Evaluations** dataset was collected via webscraping and contain a per-section instructor ratings across nine dimensions (INS1–INS6, ARTSC1-ARTSC-3) for courses spanning multiple years. The **RateMyProfessor (RMP)** dataset was scraped from the public RMP website and includes per-rating helpfulness, clarity, and difficulty scores, as well as free-text comments and tag selections left by students voluntarily.
+The data used in this analysis comes from two sources: U of T Evaluations and Rate My Professor. The **U of T Course Evaluations** dataset was collected via webscraping and contain a per-section instructor ratings across nine dimensions (INS1–INS6, ARTSC1-ARTSC-3) for courses spanning multiple years. The **RateMyProfessor (RMP)** dataset was scraped from the public RMP website and includes per-rating helpfulness, clarity, and difficulty scores, as well as free-text comments and tag selections left by students voluntarily.
 
 Note that the tables shown below do not represent the full dataset, and should only be used for illustrative purposes. The the dataset descriptions and raw files are available at [github.com/ChristopherLi05/UofT-Course-Data](https://github.com/ChristopherLi05/UofT-Course-Data). 
 
@@ -490,7 +492,7 @@ Both smooth terms are highly significant (p < 0.001), indicating that both the o
 RMP difficulty contribute meaningfully to predicting RMP ratings. The effective degrees of freedom (EDoF) 
 greater than 1 for both terms confirms that the relationships are nonlinear, justifying the use of a GAM 
 over a simpler linear model. The model explains approximately 59% of variance on the test set (R² = 0.59).
-We achieve smilar R², but the violation of assumptions imply that this is the correct model to use. 
+We achieve smilar R² compared to the OLS model, but the violation of assumptions imply that this is the correct model to use. 
 
 ```{python}
 gam = LinearGAM(s(0) + s(1)).gridsearch(X_train, y_train)
@@ -617,3 +619,17 @@ fig.update_layout(
 )
 fig.show()
 ```
+
+## Conclusion
+
+This project was set out to compare two different methods of rating U of T university professors: the official course evaluations and the RateMyProfessors platform. Through our statistical analysis, these are our findings. 
+
+First, the two rating systems differ in terms of their distributions. Official evaluations cluster around 4.2–4.39, reflecting the tendency of the institutional surveys to produce inflated and compressed scores. RMP ratings, on the other hand, are fairly spread out. This doesn't seem to follow a bimodal distribution as what self-report bias may include, but this may be due to the aggregation method used when plotting the data.
+
+Despite the distribution differences, these two systems are fairly correlated. The scatter plot and OLS regression confirm a significant positive relationship between a professor's average INS score and their average RMP rating, suggesting that these are both measuring the same underlying teaching quality.
+
+However, the residual plots suggest that several OLS assumptions are violated, so we use GAM's to model this relationship instead. We controlled for course difficulty as a second predictor, as from anecdotal experice, it is one area which affects a student's rating of the course. The GAM confirmed the nonlinear relationships for both predictors while achieving comparable predictive performance. 
+
+Finally, LDA topic modeling of RMP comments revealed five interpretable themes in student language: workload and assignments, positive reviews, teaching quality, personality, and negative experiences. This suggests that comments capture a different portion of the student experience that cannot be explained through numbers alone.
+
+Together, the results show that these systems are fairly complementary. Students would benefit from considering both sources when deciding on which courses and professors to take.
