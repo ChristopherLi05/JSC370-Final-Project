@@ -4,7 +4,7 @@
 
 [Project Report](ProjectReport.pdf)
 
-The datasets used for this project can be found [in a different repository](https://github.com/ChristopherLi05/JSC370-Final-Project). 
+The datasets used for this project can be found [in a different repository](https://github.com/ChristopherLi05/JSC370-Final-Project).
 
 ## Build Instructions
 

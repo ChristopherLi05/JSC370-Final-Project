@@ -188,6 +188,7 @@ fig = px.scatter(
     labels={"avg_ins": "Average INS Score", "avg_rmp": "Average RMP Rating"},
     title="Official Eval Score vs RMP Rating by Professor"
 )
+fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 

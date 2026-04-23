@@ -11,7 +11,7 @@ website:
       - text: "Data Exploration (Archive)"
         href: project/data_exploration.qmd
       - text: "Project Report (PDF)"
-        href: https://christopherli05.github.io/JSC370-Final-Project/ProjectReport.pdf
+        href: https://github.com/ChristopherLi05/JSC370-Final-Project/blob/master/ProjectReport.pdf
     right:
       - icon: github
         href: https://github.com/ChristopherLi05/JSC370-Final-Project
