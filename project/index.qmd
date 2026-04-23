@@ -11,9 +11,11 @@ fig-cap-location: bottom
 number-sections: true
 ---
 
-# Official vs Wild? How do Course Evaluations stack up to RateMyProfessor ratings?
+# Course Evals & Rate My Prof
 
-// Generic description here
+Every time course selection rolls around, you can spot the furious searching from every student, browsing their rating website of choice to determine which courses, and by extension professors, to choose. The two most common? Rate My Professor and the official Course Evaluations.  
+
+In this project, we compare and contrast these two methods: one official and one personal. We will first do some exploratory analysis on each dataset, exploring how they compare in several key areas, followed by some statistical analysis & modeling. 
 
 ```{python}
 import pandas as pd
@@ -23,6 +25,8 @@ import json
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
+from plotly.subplots import make_subplots
+
 pio.templates.default = "plotly_dark"
 
 import nltk
@@ -31,6 +35,14 @@ nltk.download("vader_lexicon")
 from nltk.sentiment import SentimentIntensityAnalyzer
 
 from collections import Counter
+
+import statsmodels.api as sm
+
+from pygam import LinearGAM, s
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
 ```
 
 ```{python}
@@ -143,96 +155,453 @@ fig.show()
 ```
 
 ```{python}
-ins_means = {
-    f"INS{i}": df_evals[f"INS{i}"].mean() for i in range(1, 6)
-}
+#| output: true
+#| label: fig-ins-vs-rmp
+#| fig-cap: "Scatter plot of each professor's average official INS score vs their average RMP rating. Each point represents one professor matched across both datasets, with at least 5 ratings in each system. A positive trend is present, indicating that the RMP Rating & INS Score tends to be fairly correlated. This is to be expected."
 
-rmp_dim_means = {
-    "Helpfulness": df_rmp_ratings["helpfulRating"].mean(),
-    "Clarity": df_rmp_ratings["clarityRating"].mean(),
-    "Ease": 6 - df_rmp_ratings["difficultyRating"].mean()
-}
+prof_ins = df_evals.groupby("full_name").filter(lambda x: len(x) >= 5).groupby("full_name")["average_ins"].mean().reset_index()
+prof_ins.columns = ["full_name", "avg_ins"]
+
+matched = []
+for full_name, rmp_ids in prof_mapping.items():
+    rmp_row = df_rmp[(df_rmp["id"].isin(rmp_ids)) & (df_rmp["numRatings"] >= 5)]
+    if rmp_row.empty:
+        continue
+    ins_row = prof_ins[prof_ins["full_name"].str.upper() == full_name.upper()]
+    if ins_row.empty:
+        continue
+    matched.append({
+        "full_name": full_name,
+        "avg_ins": ins_row["avg_ins"].values[0],
+        "avg_rmp": rmp_row["avgRating"].mean()
+    })
+
+df_matched = pd.DataFrame(matched)
+
+fig = px.scatter(
+    df_matched,
+    x="avg_ins",
+    y="avg_rmp",
+    hover_name="full_name",
+    trendline="ols",
+    labels={"avg_ins": "Average INS Score", "avg_rmp": "Average RMP Rating"},
+    title="Official Eval Score vs RMP Rating by Professor"
+)
+fig.show()
+```
+
+As a baseline comparison, a simple OLS regression was fit predicting average RMP rating from average INS score alone.
+
+| Metric | Value |
+|--------|-------|
+| R² | 0.348 |
+| Adjusted R² | 0.348 |
+| F-statistic | 710.7 |
+| Prob (F-statistic) | < 0.001 |
+| Log Likelihood | -1468.8 |
+| AIC | 2942 |
+| Number of Observations | 1332 |
+
+| Feature | Coefficient | Std. Error | t | P-value | 95% CI |
+|---------|-------------|------------|---|---------|--------|
+| Intercept | -2.7958 | 0.242 | -11.542 | < 0.001 | [-3.271, -2.321] |
+| avg_ins | 1.5623 | 0.059 | 26.658 | < 0.001 | [1.447, 1.677] |
+
+The OLS model finds a significant positive relationship between INS score and RMP rating: for every  1-point increase in INS score, RMP rating is predicted to increase by approximately 1.56 points. However, the model only explains 34.8% of variance in RMP ratings, which may be an issue.
+
+```{python}
+X = sm.add_constant(df_matched["avg_ins"])
+y = df_matched["avg_rmp"]
+model = sm.OLS(y, X).fit()
+
+print(model.summary())
+
+df_matched["fitted"] = model.fittedvalues
+df_matched["residual"] = model.resid
 ```
 
 ```{python}
 #| output: true
-#| label: fig-radar-ins
-#| fig-cap: "Radar chart of mean scores across the five official INS evaluation dimensions. Notice how the average of each category all lie in the 4.2-4.5 range. From anecdotal experience, students tend to just rate a 1/5 depending on their experience with the course."
+#| label: fig-ins-vs-rmp-residual
+#| fig-cap: "Residual plot from OLS regression of RMP rating on official INS score. Each point is one professor. The residual plot shows a clear funnel, which violates some OLS assumptions. A more complex model is required."
 
-categories_ins = list(ins_means.keys())
-values_ins = list(ins_means.values()) + [list(ins_means.values())[0]]
-cats_ins_closed = categories_ins + [categories_ins[0]]
+fig = px.scatter(
+    df_matched,
+    x="fitted",
+    y="residual",
+    hover_name="full_name",
+    labels={"fitted": "Fitted Values", "residual": "Residuals"},
+    title="Residual Plot: RMP Rating ~ INS Score"
+)
+fig.add_hline(y=0, line_dash="dash", line_color="red")
+fig.show()
+```
 
-fig = go.Figure()
+```{python}
+#| output: true
+#| label: fig-difficulty-vs-rating
+#| fig-cap: "Scatter plot of average difficulty vs average rating on RateMyProfessor, restricted to professors with at least 5 ratings. A negative trend is present, suggesting students rate harder professors lower. This is to be expected."
 
-fig.add_trace(go.Scatterpolar(
-    r=values_ins,
-    theta=cats_ins_closed,
-    fill='toself',
-    name='Official Eval (INS dimensions)',
-))
+fig = px.scatter(
+    df_rmp[df_rmp["numRatings"] >= 5],
+    x="avgDifficulty",
+    y="avgRating",
+    hover_name="full_name",
+    trendline="ols",
+    labels={"avgDifficulty": "Average Difficulty (1–5)", "avgRating": "Average Rating (1–5)"},
+    title="RMP Difficulty vs Rating by Professor"
+)
+fig.show()
+```
 
-fig.update_layout(
-    title="Radar Chart: Official INS Dimensions",
-    polar=dict(radialaxis=dict(range=[1, 5])),
-    showlegend=True,
-    height=500,
-    margin=dict(t=80, b=80, l=100, r=100)
+As a baseline comparison, a simple OLS regression was fit predicting average RMP rating from average difficulty score alone.
+
+| Metric | Value |
+|--------|-------|
+| R² | 0.327 |
+| Adjusted R² | 0.327 |
+| F-statistic | 1339 |
+| Prob (F-statistic) | < 0.001 |
+| Log Likelihood | -3303.8 |
+| AIC | 6612 |
+| Number of Observations | 2758 |
+
+| Feature | Coefficient | Std. Error | t | P-value | 95% CI |
+|---------|-------------|------------|---|---------|--------|
+| Intercept | 6.4447 | 0.080 | 80.773 | < 0.001 | [6.288, 6.601] |
+| avgDifficulty | -0.8975 | 0.025 | -36.589 | < 0.001 | [-0.946, -0.849] |
+
+The OLS model finds a significant negative relationship between difficulty and RMP rating: for every 1-point increase in difficulty, RMP rating is predicted to decrease by approximately 0.90 points. Both the intercept and difficulty coefficient are highly significant (p < 0.001), and the model explains 32.7% 
+of variance in RMP ratings.
+
+```{python}
+df_rmp_filtered = df_rmp[df_rmp["numRatings"] >= 5].dropna(subset=["avgDifficulty", "avgRating"]).copy()
+
+X = sm.add_constant(df_rmp_filtered["avgDifficulty"])
+y = df_rmp_filtered["avgRating"]
+model = sm.OLS(y, X).fit()
+
+df_rmp_filtered["fitted"] = model.fittedvalues
+df_rmp_filtered["residual"] = model.resid
+
+print(model.summary())
+```
+
+```{python}
+#| output: true
+#| label: fig-difficulty-vs-rating-residual
+#| fig-cap: "Residual plot from OLS regression of RMP rating on average difficulty, restricted to professors with at least 5 ratings. The residual plot shows a clear funnel, which violates some OLS assumptions. A more complex model is required."
+
+fig = px.scatter(
+    df_rmp_filtered,
+    x="fitted",
+    y="residual",
+    hover_name="full_name",
+    labels={"fitted": "Fitted Values", "residual": "Residuals"},
+    title="Residual Plot: RMP Rating ~ Difficulty"
+)
+fig.add_hline(y=0, line_dash="dash", line_color="red")
+fig.show()
+```
+
+```{python}
+#| output: true
+#| label: fig-rmp-tags
+#| fig-cap: "Top 20 most frequently used rating tags left by students on RateMyProfessor, restricted to professors with at least 5 ratings. Tags reflect common themes in student experience. There is a mix of both positive and negative tags."
+
+valid_prof_ids = df_rmp[df_rmp["numRatings"] >= 5]["id"].unique()
+
+all_tags = (
+    df_rmp_ratings[df_rmp_ratings["prof_id"].isin(valid_prof_ids)]["ratingTags"]
+    .dropna()
+    .str.split("--")
+    .explode()
+    .str.strip()
+)
+all_tags = all_tags[all_tags != ""]
+
+tag_counts = Counter(all_tags).most_common(20)
+df_tags = pd.DataFrame(tag_counts, columns=["tag", "count"]).sort_values("count")
+
+fig = px.bar(
+    df_tags,
+    x="count",
+    y="tag",
+    orientation="h",
+    labels={"count": "Count", "tag": "Tag"},
+    title="Top 20 RMP Rating Tags"
 )
 fig.show()
 ```
 
 ```{python}
 #| output: true
+#| label: fig-vader-sentiment
+#| fig-cap: "Distribution of VADER compound sentiment scores from RateMyProfessor comments, restricted to professors with at least 5 ratings. Scores range from -1 (most negative) to +1 (most positive). We notice a slight bimodal distribution, with most comments concentrating around very positive. This is fairly interesting to see."
 
-import re
-from collections import Counter
+valid_prof_ids = df_rmp[df_rmp["numRatings"] >= 5]["id"].unique()
 
-# Parse and flatten all tags
-all_tags = []
-for tags_str in df_rmp_ratings["ratingTags"].dropna():
-    tags = [t.strip() for t in tags_str.split("--") if t.strip()]
-    all_tags.extend(tags)
+df_filtered_ratings = df_rmp_ratings[df_rmp_ratings["prof_id"].isin(valid_prof_ids)].copy()
 
-tag_counts = Counter(all_tags)
-tag_counts_df = pd.DataFrame(tag_counts.items(), columns=["tag", "count"]).sort_values("count", ascending=False)
-
-# Remove placeholder/empty tags
-tag_counts_df = tag_counts_df[tag_counts_df["tag"].str.len() > 0]
-
-# Normalize sizes for display
-max_count = tag_counts_df["count"].max()
-min_count = tag_counts_df["count"].min()
-tag_counts_df["size"] = 12 + 38 * (tag_counts_df["count"] - min_count) / (max_count - min_count + 1)
-
-# Spread tags across a pseudo-random 2D grid
-rng = np.random.default_rng(42)
-n = len(tag_counts_df)
-tag_counts_df["x"] = rng.uniform(0, 1, n)
-tag_counts_df["y"] = rng.uniform(0, 1, n)
-
-fig = go.Figure()
-
-fig.add_trace(go.Scatter(
-    x=tag_counts_df["x"],
-    y=tag_counts_df["y"],
-    mode="text",
-    text=tag_counts_df["tag"],
-    textfont=dict(
-        size=tag_counts_df["size"].tolist(),
-        color=[f"rgba({rng.integers(100,255)},{rng.integers(100,255)},{rng.integers(180,255)},0.9)" for _ in range(n)]
-    ),
-    hovertemplate="<b>%{text}</b><br>Count: %{customdata}<extra></extra>",
-    customdata=tag_counts_df["count"]
-))
-
-fig.update_layout(
-    title="RateMyProfessor Rating Tags Word Cloud",
-    xaxis=dict(visible=False),
-    yaxis=dict(visible=False),
-    height=550,
-    margin=dict(t=60, b=20, l=20, r=20)
+sia = SentimentIntensityAnalyzer()
+df_filtered_ratings["sentiment"] = (
+    df_filtered_ratings["comment"]
+    .dropna()
+    .apply(lambda x: sia.polarity_scores(x)["compound"])
 )
 
+fig = px.histogram(
+    df_filtered_ratings.dropna(subset=["sentiment"]),
+    x="sentiment",
+    nbins=50,
+    labels={"sentiment": "VADER Compound Score", "count": "Count"},
+    title="Distribution of RMP Comment Sentiment Scores"
+)
+fig.update_layout(yaxis_title="Count")
+fig.show()
+```
+
+## Data Modeling
+
+### Model Exploration
+
+We previously explored that simple OLS's are not suitable for modeling some of this data. Hence, we try GAMs to see how well they perform. 
+
+```{python}
+# Build modeling dataset from matched professors
+prof_ins = df_evals.groupby("full_name").filter(lambda x: len(x) >= 5).groupby("full_name")["average_ins"].mean().reset_index()
+prof_ins.columns = ["full_name", "avg_ins"]
+
+matched = []
+for full_name, rmp_ids in prof_mapping.items():
+    rmp_row = df_rmp[(df_rmp["id"].isin(rmp_ids)) & (df_rmp["numRatings"] >= 5)]
+    if rmp_row.empty:
+        continue
+    ins_row = prof_ins[prof_ins["full_name"].str.upper() == full_name.upper()]
+    if ins_row.empty:
+        continue
+    matched.append({
+        "full_name": full_name,
+        "avg_ins": ins_row["avg_ins"].values[0],
+        "avg_rmp": rmp_row["avgRating"].mean(),
+        "avgDifficulty": rmp_row["avgDifficulty"].mean()
+    })
+
+df_matched = pd.DataFrame(matched).dropna()
+
+feature_cols = ["avg_ins", "avgDifficulty"]
+X = df_matched[feature_cols].values
+y = df_matched["avg_rmp"].values
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=370)
+```
+
+A multiple OLS regression was fit predicting average RMP rating from average INS score and average difficulty.
+
+| Metric | Value |
+|--------|-------|
+| R² | 0.510 |
+| Adjusted R² | 0.509 |
+| F-statistic | 552.4 |
+| Prob (F-statistic) | < 0.001 |
+| Log Likelihood | -1023.3 |
+| AIC | 2053 |
+| Number of Observations | 1065 |
+| Test RMSE | 0.5738 |
+| Test R² | 0.5938 |
+
+| Feature | Coefficient | Std. Error | t | P-value | 95% CI |
+|---------|-------------|------------|---|---------|--------|
+| Intercept | 0.9579 | 0.293 | 3.265 | < 0.001 | [0.382, 1.534] |
+| avg_ins | 1.1709 | 0.059 | 19.732 | < 0.001 | [1.054, 1.287] |
+| avgDifficulty | -0.6744 | 0.033 | -20.187 | < 0.001 | [-0.740, -0.609] |
+
+Both predictors are highly significant (p < 0.001). Average INS score has a positive effect on RMP 
+rating: a 1-point increase in INS score is associated with approximately a 1.17-point increase in 
+RMP rating. Conversely, avgDifficulty has a negative effect: a 1-point increase in difficulty is 
+associated with approximately a 0.67-point decrease in RMP rating. 
+A test R² of 0.59 indicates that only about 59% of the data's variance is explained by the model.
+
+```{python}
+X_train_sm = sm.add_constant(X_train)
+X_test_sm = sm.add_constant(X_test)
+
+ols_model = sm.OLS(y_train, X_train_sm).fit()
+print(ols_model.summary())
+
+y_pred = ols_model.predict(X_test_sm)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f"Test RMSE: {rmse:.4f}")
+print(f"Test R²: {r2:.4f}")
+```
+
+```{python}
+#| output: true
+#| label: fig-ols-residual
+#| fig-cap: "Residual plot from OLS regression predicting RMP rating from average INS score and average difficulty. Each point represents one professor in the test set. A clear funnel shape is present, indicating that more complex models are needed."
+
+y_pred = ols_model.predict(X_test_sm)
+residuals = y_test - y_pred
+
+fig = px.scatter(
+    x=y_pred,
+    y=residuals,
+    labels={"x": "Fitted Values", "y": "Residuals"},
+    title="Residual Plot: OLS (avg_ins + avgDifficulty → avg_rmp)"
+)
+fig.add_hline(y=0, line_dash="dash", line_color="red")
+fig.show()
+```
+
+The GAM model was fit using two smooth terms: average INS score (`s(0)`) and average RMP difficulty (`s(1)`), 
+predicting a professor's average RMP rating. Smoothing parameters were selected via grid search cross-validation.
+
+| Metric | Value |
+|--------|-------|
+| Test RMSE | 0.5766 |
+| Test R² | 0.5899 |
+| Pseudo R² | 0.5235 |
+| Log Likelihood | -1008.322 |
+| AIC | 2030.364 |
+| GCV | 0.395 |
+| Effective DoF | 5.860 |
+| Number of Samples | 1065 |
+
+| Feature | Lambda | EDoF | P-value | Significance |
+|---------|--------|------|---------|--------------|
+| avg_ins | 1000 | 3.4 | < 0.001 | *** |
+| avgDifficulty | 1000 | 2.5 | < 0.001 | *** |
+| Intercept | — | 0.0 | < 0.001 | *** |
+
+Both smooth terms are highly significant (p < 0.001), indicating that both the official INS score and 
+RMP difficulty contribute meaningfully to predicting RMP ratings. The effective degrees of freedom (EDoF) 
+greater than 1 for both terms confirms that the relationships are nonlinear, justifying the use of a GAM 
+over a simpler linear model. The model explains approximately 59% of variance on the test set (R² = 0.59).
+We achieve smilar R², but the violation of assumptions imply that this is the correct model to use. 
+
+```{python}
+gam = LinearGAM(s(0) + s(1)).gridsearch(X_train, y_train)
+
+y_pred = gam.predict(X_test)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f"Test RMSE: {rmse:.4f}")
+print(f"Test R²: {r2:.4f}")
+print(gam.summary())
+```
+
+```{python}
+#| output: true
+#| label: fig-gam-result
+#| fig-cap: "GAM partial dependence plots predicting RMP average rating from official INS score and average difficulty, for professors with at least 5 ratings in each system. Shaded regions represent 95% confidence intervals. We fit a singular GAM with the two predictors we are interested in. This follows a similar pattern as earler, where there is a positive correlation with average INS score, and a negative correlation with difficulty."
+
+# Partial dependence plots
+feature_labels = ["Average INS Score", "Average Difficulty"]
+
+fig = make_subplots(rows=1, cols=len(feature_cols), subplot_titles=feature_labels)
+
+for i, (col, label) in enumerate(zip(feature_cols, feature_labels)):
+    XX = gam.generate_X_grid(term=i)
+    pdep, confi = gam.partial_dependence(term=i, X=XX, width=0.95)
+    x_vals = XX[:, i]
+
+    fig.add_trace(
+        go.Scatter(x=x_vals, y=pdep, mode="lines", name=label, line=dict(color="steelblue")),
+        row=1, col=i+1
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=np.concatenate([x_vals, x_vals[::-1]]),
+            y=np.concatenate([confi[:, 0], confi[:, 1][::-1]]),
+            fill="toself",
+            fillcolor="rgba(70, 130, 180, 0.3)",
+            line=dict(color="rgba(255,255,255,0)"),
+            showlegend=False,
+            name=f"{label} CI"
+        ),
+        row=1, col=i+1
+    )
+    fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=i+1)
+    fig.update_xaxes(title_text=label, row=1, col=i+1)
+    fig.update_yaxes(title_text="Partial Effect", row=1, col=i+1)
+
+fig.update_layout(title="GAM Partial Dependence Plots", showlegend=False)
+fig.show()
+```
+
+### LDA Topic Modeling
+
+Next, we explore some common words used in the RMP ratings.
+
+```{python}
+valid_prof_ids = df_rmp[df_rmp["numRatings"] >= 5]["id"].unique()
+
+comments = (
+    df_rmp_ratings[df_rmp_ratings["prof_id"].isin(valid_prof_ids)]["comment"]
+    .dropna()
+    .str.lower()
+    .str.replace(r"[^a-z\s]", "", regex=True)
+    .str.strip()
+)
+comments = comments[comments != ""]
+
+vectorizer = CountVectorizer(
+    max_df=0.95,
+    min_df=5,
+    stop_words="english",
+    max_features=1000
+)
+dtm = vectorizer.fit_transform(comments)
+
+n_topics = 5
+lda = LatentDirichletAllocation(n_components=n_topics, random_state=370, max_iter=20)
+lda.fit(dtm)
+
+# Get top words per topic
+n_top_words = 10
+vocab = vectorizer.get_feature_names_out()
+
+topics = []
+for topic_idx, topic in enumerate(lda.components_):
+    top_words = [vocab[i] for i in topic.argsort()[:-n_top_words - 1:-1]]
+    top_weights = sorted(topic, reverse=True)[:n_top_words]
+    for word, weight in zip(top_words, top_weights):
+        topics.append({"topic": f"Topic {topic_idx + 1}", "word": word, "weight": weight})
+
+df_topics = pd.DataFrame(topics)
+```
+
+```{python}
+#| output: true
+#| label: fig-lda
+#| fig-cap: "LDA of the most common word per category"
+
+topic_descriptions = [
+    "Workload & Assignments",
+    "Positive Reviews",
+    "Teaching Quality",
+    "Personality Reviews",
+    "Negative Reviews"
+]
+
+fig = make_subplots(rows=1, cols=n_topics, subplot_titles=[f"Topic {i+1}<br>{topic_descriptions[i]}" for i in range(n_topics)])
+fig.update_annotations(font_size=10)
+
+for i in range(n_topics):
+    df_t = df_topics[df_topics["topic"] == f"Topic {i+1}"].sort_values("weight")
+    fig.add_trace(
+        go.Bar(x=df_t["weight"], y=df_t["word"], orientation="h", showlegend=False),
+        row=1, col=i+1
+    )
+    fig.update_xaxes(title_text="Weight", row=1, col=i+1)
+
+fig.update_layout(
+    title="LDA Topic Modeling: Top Words per Topic",
+    height=500,
+    margin=dict(t=100)
+)
 fig.show()
 ```
