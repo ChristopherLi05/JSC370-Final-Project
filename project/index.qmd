@@ -11,7 +11,7 @@ fig-cap-location: bottom
 number-sections: true
 ---
 
-# Course Evals & Rate My Prof
+# Two Ratings, One Professor: A Statistical Look at How U of T Professors Are Rated
 
 Every time course selection rolls around, you can spot the furious searching from every student, browsing their rating website of choice to determine which courses, and by extension professors, to choose. The two most common? Rate My Professor and the official Course Evaluations.  
 
@@ -149,7 +149,8 @@ fig.update_layout(
     title="Distribution of Instructor Ratings: Official Evals vs RateMyProfessor",
     xaxis_title="Rating (1–5)",
     yaxis_title="Proportion",
-    legend=dict(x=0.01, y=0.99)
+    legend=dict(x=0.01, y=0.99),
+    margin=dict(t=100)
 )
 fig.show()
 ```
@@ -206,6 +207,7 @@ As a baseline comparison, a simple OLS regression was fit predicting average RMP
 |---------|-------------|------------|---|---------|--------|
 | Intercept | -2.7958 | 0.242 | -11.542 | < 0.001 | [-3.271, -2.321] |
 | avg_ins | 1.5623 | 0.059 | 26.658 | < 0.001 | [1.447, 1.677] |
+(Table 1)
 
 The OLS model finds a significant positive relationship between INS score and RMP rating: for every  1-point increase in INS score, RMP rating is predicted to increase by approximately 1.56 points. However, the model only explains 34.8% of variance in RMP ratings, which may be an issue.
 
@@ -234,6 +236,7 @@ fig = px.scatter(
     title="Residual Plot: RMP Rating ~ INS Score"
 )
 fig.add_hline(y=0, line_dash="dash", line_color="red")
+fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
@@ -251,10 +254,11 @@ fig = px.scatter(
     labels={"avgDifficulty": "Average Difficulty (1–5)", "avgRating": "Average Rating (1–5)"},
     title="RMP Difficulty vs Rating by Professor"
 )
+fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
-As a baseline comparison, a simple OLS regression was fit predicting average RMP rating from average difficulty score alone.
+As a baseline comparison, a simple OLS regression was fit predicting average RMP rating from average difficulty score alone. 
 
 | Metric | Value |
 |--------|-------|
@@ -270,6 +274,7 @@ As a baseline comparison, a simple OLS regression was fit predicting average RMP
 |---------|-------------|------------|---|---------|--------|
 | Intercept | 6.4447 | 0.080 | 80.773 | < 0.001 | [6.288, 6.601] |
 | avgDifficulty | -0.8975 | 0.025 | -36.589 | < 0.001 | [-0.946, -0.849] |
+(Table 2)
 
 The OLS model finds a significant negative relationship between difficulty and RMP rating: for every 1-point increase in difficulty, RMP rating is predicted to decrease by approximately 0.90 points. Both the intercept and difficulty coefficient are highly significant (p < 0.001), and the model explains 32.7% 
 of variance in RMP ratings.
@@ -301,6 +306,7 @@ fig = px.scatter(
     title="Residual Plot: RMP Rating ~ Difficulty"
 )
 fig.add_hline(y=0, line_dash="dash", line_color="red")
+fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
@@ -331,6 +337,7 @@ fig = px.bar(
     labels={"count": "Count", "tag": "Tag"},
     title="Top 20 RMP Rating Tags"
 )
+fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
@@ -357,7 +364,7 @@ fig = px.histogram(
     labels={"sentiment": "VADER Compound Score", "count": "Count"},
     title="Distribution of RMP Comment Sentiment Scores"
 )
-fig.update_layout(yaxis_title="Count")
+fig.update_layout(yaxis_title="Count", margin=dict(t=100))
 fig.show()
 ```
 
@@ -415,6 +422,7 @@ A multiple OLS regression was fit predicting average RMP rating from average INS
 | Intercept | 0.9579 | 0.293 | 3.265 | < 0.001 | [0.382, 1.534] |
 | avg_ins | 1.1709 | 0.059 | 19.732 | < 0.001 | [1.054, 1.287] |
 | avgDifficulty | -0.6744 | 0.033 | -20.187 | < 0.001 | [-0.740, -0.609] |
+(Table 3)
 
 Both predictors are highly significant (p < 0.001). Average INS score has a positive effect on RMP 
 rating: a 1-point increase in INS score is associated with approximately a 1.17-point increase in 
@@ -452,6 +460,7 @@ fig = px.scatter(
     title="Residual Plot: OLS (avg_ins + avgDifficulty → avg_rmp)"
 )
 fig.add_hline(y=0, line_dash="dash", line_color="red")
+fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
@@ -474,6 +483,7 @@ predicting a professor's average RMP rating. Smoothing parameters were selected 
 | avg_ins | 1000 | 3.4 | < 0.001 | *** |
 | avgDifficulty | 1000 | 2.5 | < 0.001 | *** |
 | Intercept | — | 0.0 | < 0.001 | *** |
+(Table 4)
 
 Both smooth terms are highly significant (p < 0.001), indicating that both the official INS score and 
 RMP difficulty contribute meaningfully to predicting RMP ratings. The effective degrees of freedom (EDoF) 
@@ -528,7 +538,8 @@ for i, (col, label) in enumerate(zip(feature_cols, feature_labels)):
     fig.update_xaxes(title_text=label, row=1, col=i+1)
     fig.update_yaxes(title_text="Partial Effect", row=1, col=i+1)
 
-fig.update_layout(title="GAM Partial Dependence Plots", showlegend=False)
+fig.update_layout(title="GAM Partial Dependence Plots", showlegend=False,
+    margin=dict(t=100))
 fig.show()
 ```
 
