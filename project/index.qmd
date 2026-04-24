@@ -126,7 +126,7 @@ If you look at the original dataset, you may have noticed that the fields do not
 ```{python}
 #| output: true
 #| label: fig-ratings-dist
-#| fig-cap: "Distribution of instructor ratings from official course evaluations and RateMyProfessor (RMP). Official evaluations are heavily concentrated near 4.2–4.39, while RMP ratings are much flatter, suggesting that students who voluntarily rate professors on RMP tend to give more critical assessments than those captured in mandatory course evaluations."
+#| fig-cap: "Distribution of instructor ratings from official course evaluations and RateMyProfessor (RMP). "
 
 fig = go.Figure()
 
@@ -157,10 +157,12 @@ fig.update_layout(
 fig.show()
 ```
 
+Official evaluations are heavily concentrated near 4.2–4.39, while RMP ratings are much flatter, suggesting that students who voluntarily rate professors on RMP tend to give more critical assessments than those captured in mandatory course evaluations.
+
 ```{python}
 #| output: true
 #| label: fig-ins-vs-rmp
-#| fig-cap: "Scatter plot of each professor's average official INS score vs their average RMP rating. Each point represents one professor matched across both datasets, with at least 5 ratings in each system. A positive trend is present, indicating that the RMP Rating & INS Score tends to be fairly correlated. This is to be expected."
+#| fig-cap: "Scatter plot of each professor's average official INS score vs their average RMP rating. Each point represents one professor matched across both datasets, with at least 5 ratings in each system. "
 
 prof_ins = df_evals.groupby("full_name").filter(lambda x: len(x) >= 5).groupby("full_name")["average_ins"].mean().reset_index()
 prof_ins.columns = ["full_name", "avg_ins"]
@@ -193,6 +195,8 @@ fig = px.scatter(
 fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
+
+A positive trend is present, indicating that the RMP Rating & INS Score tends to be fairly correlated. This is to be expected.
 
 As a baseline comparison, a simple OLS regression was fit predicting average RMP rating from average INS score alone.
 
@@ -228,7 +232,7 @@ df_matched["residual"] = model.resid
 ```{python}
 #| output: true
 #| label: fig-ins-vs-rmp-residual
-#| fig-cap: "Residual plot from OLS regression of RMP rating on official INS score. Each point is one professor. The residual plot shows a clear funnel, which violates some OLS assumptions. A more complex model is required."
+#| fig-cap: "Residual plot from OLS regression of RMP rating on official INS score. Each point is one professor. "
 
 fig = px.scatter(
     df_matched,
@@ -243,10 +247,12 @@ fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
+The residual plot shows a clear funnel, which violates some OLS assumptions. A more complex model is required.
+
 ```{python}
 #| output: true
 #| label: fig-difficulty-vs-rating
-#| fig-cap: "Scatter plot of average difficulty vs average rating on RateMyProfessor, restricted to professors with at least 5 ratings. A negative trend is present, suggesting students rate harder professors lower. This is to be expected."
+#| fig-cap: "Scatter plot of average difficulty vs average rating on RateMyProfessor, restricted to professors with at least 5 ratings. "
 
 fig = px.scatter(
     df_rmp[df_rmp["numRatings"] >= 5],
@@ -260,6 +266,8 @@ fig = px.scatter(
 fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
+
+A negative trend is present, suggesting students rate harder professors lower. This is to be expected.
 
 As a baseline comparison, a simple OLS regression was fit predicting average RMP rating from average difficulty score alone. 
 
@@ -298,7 +306,7 @@ print(model.summary())
 ```{python}
 #| output: true
 #| label: fig-difficulty-vs-rating-residual
-#| fig-cap: "Residual plot from OLS regression of RMP rating on average difficulty, restricted to professors with at least 5 ratings. The residual plot shows a clear funnel, which violates some OLS assumptions. A more complex model is required."
+#| fig-cap: "Residual plot from OLS regression of RMP rating on average difficulty, restricted to professors with at least 5 ratings. "
 
 fig = px.scatter(
     df_rmp_filtered,
@@ -313,10 +321,12 @@ fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
+The residual plot shows a clear funnel, which violates some OLS assumptions. A more complex model is required.
+
 ```{python}
 #| output: true
 #| label: fig-rmp-tags
-#| fig-cap: "Top 20 most frequently used rating tags left by students on RateMyProfessor, restricted to professors with at least 5 ratings. Tags reflect common themes in student experience. There is a mix of both positive and negative tags."
+#| fig-cap: "Top 20 most frequently used rating tags left by students on RateMyProfessor, restricted to professors with at least 5 ratings."
 
 valid_prof_ids = df_rmp[df_rmp["numRatings"] >= 5]["id"].unique()
 
@@ -344,10 +354,12 @@ fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
 
+Tags reflect common themes in student experience. There is a mix of both positive and negative tags.
+
 ```{python}
 #| output: true
 #| label: fig-vader-sentiment
-#| fig-cap: "Distribution of VADER compound sentiment scores from RateMyProfessor comments, restricted to professors with at least 5 ratings. Scores range from -1 (most negative) to +1 (most positive). We notice a slight bimodal distribution, with most comments concentrating around very positive. This is fairly interesting to see."
+#| fig-cap: "Distribution of VADER compound sentiment scores from RateMyProfessor comments, restricted to professors with at least 5 ratings. Scores range from -1 (most negative) to +1 (most positive). "
 
 valid_prof_ids = df_rmp[df_rmp["numRatings"] >= 5]["id"].unique()
 
@@ -370,6 +382,8 @@ fig = px.histogram(
 fig.update_layout(yaxis_title="Count", margin=dict(t=100))
 fig.show()
 ```
+
+We notice a slight bimodal distribution, with most comments concentrating around very positive. This is fairly interesting to see.
 
 ## Data Modeling
 
@@ -451,7 +465,7 @@ print(f"Test R²: {r2:.4f}")
 ```{python}
 #| output: true
 #| label: fig-ols-residual
-#| fig-cap: "Residual plot from OLS regression predicting RMP rating from average INS score and average difficulty. Each point represents one professor in the test set. A clear funnel shape is present, indicating that more complex models are needed."
+#| fig-cap: "Residual plot from OLS regression predicting RMP rating from average INS score and average difficulty. Each point represents one professor in the test set. "
 
 y_pred = ols_model.predict(X_test_sm)
 residuals = y_test - y_pred
@@ -466,6 +480,8 @@ fig.add_hline(y=0, line_dash="dash", line_color="red")
 fig.update_layout(margin=dict(t=100))
 fig.show()
 ```
+
+A clear funnel shape is present, indicating that more complex models are needed.
 
 The GAM model was fit using two smooth terms: average INS score (`s(0)`) and average RMP difficulty (`s(1)`), 
 predicting a professor's average RMP rating. Smoothing parameters were selected via grid search cross-validation.
@@ -509,7 +525,7 @@ print(gam.summary())
 ```{python}
 #| output: true
 #| label: fig-gam-result
-#| fig-cap: "GAM partial dependence plots predicting RMP average rating from official INS score and average difficulty, for professors with at least 5 ratings in each system. Shaded regions represent 95% confidence intervals. We fit a singular GAM with the two predictors we are interested in. This follows a similar pattern as earler, where there is a positive correlation with average INS score, and a negative correlation with difficulty."
+#| fig-cap: "GAM partial dependence plots predicting RMP average rating from official INS score and average difficulty, for professors with at least 5 ratings in each system. Shaded regions represent 95% confidence intervals. We fit a singular GAM with the two predictors we are interested in. "
 
 # Partial dependence plots
 feature_labels = ["Average INS Score", "Average Difficulty"]
@@ -545,6 +561,8 @@ fig.update_layout(title="GAM Partial Dependence Plots", showlegend=False,
     margin=dict(t=100))
 fig.show()
 ```
+
+This follows a similar pattern as earler, where there is a positive correlation with average INS score, and a negative correlation with difficulty.
 
 ### LDA Topic Modeling
 
@@ -622,13 +640,13 @@ fig.show()
 
 ## Conclusion
 
-This project was set out to compare two different methods of rating U of T university professors: the official course evaluations and the RateMyProfessors platform. Through our statistical analysis, these are our findings. 
+This project was set out to compare two different methods of rating U of T university professors: the official course evaluations and the RateMyProfessors platform. Through our statistical analysis, these are our findings.
 
-First, the two rating systems differ in terms of their distributions. Official evaluations cluster around 4.2–4.39, reflecting the tendency of the institutional surveys to produce inflated and compressed scores. RMP ratings, on the other hand, are fairly spread out. This doesn't seem to follow a bimodal distribution as what self-report bias may include, but this may be due to the aggregation method used when plotting the data.
+First, the two rating systems differ in terms of their distributions. Official evaluations cluster around 4.2–4.39, reflecting the tendency of the institutional surveys to produce inflated and compressed scores. RMP ratings, on the other hand, are fairly spread out. This doesn’t seem to follow a bimodal distribution as what self-report bias may include, but this may be due to the aggregation method used when plotting the data.
 
-Despite the distribution differences, these two systems are fairly correlated. The scatter plot and OLS regression confirm a significant positive relationship between a professor's average INS score and their average RMP rating, suggesting that these are both measuring the same underlying teaching quality.
+Despite the distribution differences, these two systems are fairly correlated. The scatter plot and OLS regression confirm a significant positive relationship between a professor’s average INS score and their average RMP rating, suggesting that these are both measuring the same underlying teaching quality.
 
-However, the residual plots suggest that several OLS assumptions are violated, so we use GAM's to model this relationship instead. We controlled for course difficulty as a second predictor, as from anecdotal experice, it is one area which affects a student's rating of the course. The GAM confirmed the nonlinear relationships for both predictors while achieving comparable predictive performance. 
+However, the residual plots suggest that several OLS assumptions are violated, so we use GAM’s to model this relationship instead. We controlled for course difficulty as a second predictor, as from anecdotal experience, it is one area which affects a student’s rating of the course. The GAM confirmed the nonlinear relationships for both predictors while achieving comparable predictive performance.
 
 Finally, LDA topic modeling of RMP comments revealed five interpretable themes in student language: workload and assignments, positive reviews, teaching quality, personality, and negative experiences. This suggests that comments capture a different portion of the student experience that cannot be explained through numbers alone.
 
