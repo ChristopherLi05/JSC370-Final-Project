@@ -4,7 +4,7 @@
 
 [Project Report](ProjectReport.pdf)
 
-[Project Recording](FinalProjectRecording.mp4)
+[Project Recording](https://youtu.be/FdmZc4w2cuQ)
 
 The datasets used for this project can be found [in a different repository](https://github.com/ChristopherLi05/JSC370-Final-Project).
 
